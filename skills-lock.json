@@ -13,6 +13,12 @@
       "skillPath": "skills/neon-postgres/SKILL.md",
       "computedHash": "64150370145c18f563fbc652c8d8bf273c4943d2a9f2039ddd51af9fd08d96f3"
     },
+    "supabase": {
+      "source": "supabase/agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/supabase/SKILL.md",
+      "computedHash": "583344c20e90f3654dbb0632f088d89fd9f1dde8ac85e8a644dd12eee59b1380"
+    },
     "upstash-ratelimit-js": {
       "source": "upstash/skills",
       "sourceType": "github",
