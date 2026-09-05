@@ -1,0 +1,74 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Category {
+  PHONE
+  LAPTOP
+  DESKTOP
+  MONITOR
+  HUB
+  CABLE
+  PENDRIVE
+  KEYBOARD
+  MOUSE
+  HEADPHONE
+  CHARGER
+  OTHER
+}
+
+enum ProductStatus {
+  ACTIVE
+  SOLD
+  GIFTED
+  BROKEN
+  LOST
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  createdAt    DateTime @default(now())
+}
+
+model Product {
+  id               String        @id @default(cuid())
+  name             String
+  category         Category
+  brand            String?
+  model            String?
+
+  // Flexible key-value specs — e.g. { "ram": "16GB", "storage": "512GB SSD" }
+  specs            Json          @default("{}")
+
+  // PUBLIC — copyright-free reference image (manufacturer press image / stock photo)
+  referenceImage   String?
+
+  // SENSITIVE — owner-only
+  price            Float
+  currency         String        @default("BDT")
+  purchaseDate     DateTime
+  purchasedFrom    String?
+  warrantyExpiry   DateTime?
+  serialNumber     String?
+  receiptImages    String[]
+  notes            String?
+
+  status           ProductStatus @default(ACTIVE)
+  tags             String[]
+  warrantyNotified Boolean       @default(false)
+
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+
+  @@index([category])
+  @@index([purchaseDate])
+  @@index([warrantyExpiry])
+  @@index([status])
+}

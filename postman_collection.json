@@ -1,0 +1,275 @@
+{
+  "info": {
+    "name": "Gadget Purchase Tracker API",
+    "description": "Owner-only gadget purchase tracker backend — public sanitized catalog + authenticated owner dashboard, analytics and CSV export. See gadget-purchase-tracker-spec.md in the frontend repo for the full spec.\n\nHow to use:\n1. Set `baseUrl` (defaults to http://localhost:4000) in the collection variables if your API runs elsewhere.\n2. Run \"Login\" in the Auth folder first — its Tests script automatically stores the returned access token into the `accessToken` collection variable, which every other request's Bearer auth reads from.\n3. Postman's cookie jar handles the httpOnly refresh-token cookie automatically (same-domain requests), so \"Refresh\" and \"Logout\" work without extra setup as long as you hit them from the same Postman session that logged in.\n4. \"Create Product\" auto-saves the created product's id into the `productId` variable so the by-id / update / delete requests below it work out of the box.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:4000", "type": "string" },
+    { "key": "apiBase", "value": "{{baseUrl}}/api/v1", "type": "string" },
+    { "key": "accessToken", "value": "", "type": "string" },
+    { "key": "ownerEmail", "value": "rifatswd@gmail.com", "type": "string" },
+    { "key": "ownerPassword", "value": "@Rifat1234", "type": "string" },
+    { "key": "productId", "value": "", "type": "string" }
+  ],
+  "auth": {
+    "type": "bearer",
+    "bearer": [{ "key": "token", "value": "{{accessToken}}", "type": "string" }]
+  },
+  "item": [
+    {
+      "name": "Health",
+      "item": [
+        {
+          "name": "Health check",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/health", "host": ["{{baseUrl}}"], "path": ["health"] },
+            "description": "No auth. Returns DB + Redis connection status — what a load balancer / orchestrator would probe."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "Login",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "  const data = pm.response.json().data;",
+                  "  pm.collectionVariables.set('accessToken', data.accessToken);",
+                  "  console.log('accessToken saved to collection variable');",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{ownerEmail}}\",\n  \"password\": \"{{ownerPassword}}\"\n}"
+            },
+            "url": { "raw": "{{apiBase}}/auth/login", "host": ["{{apiBase}}"], "path": ["auth", "login"] },
+            "description": "Rate-limited to 5 attempts / 15 min per IP. Sets the httpOnly refresh-token cookie and returns a short-lived access token in the body."
+          }
+        },
+        {
+          "name": "Refresh",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "  const data = pm.response.json().data;",
+                  "  pm.collectionVariables.set('accessToken', data.accessToken);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [],
+            "url": { "raw": "{{apiBase}}/auth/refresh", "host": ["{{apiBase}}"], "path": ["auth", "refresh"] },
+            "description": "Reads the refresh-token cookie (sent automatically by Postman's cookie jar after Login) and issues a fresh access token."
+          }
+        },
+        {
+          "name": "Logout",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": { "raw": "{{apiBase}}/auth/logout", "host": ["{{apiBase}}"], "path": ["auth", "logout"] },
+            "description": "Owner-only. Clears the refresh-token cookie."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Products",
+      "item": [
+        {
+          "name": "List products (public/owner)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{apiBase}}/products?page=1&limit=10&sortBy=purchaseDate&sortOrder=desc",
+              "host": ["{{apiBase}}"],
+              "path": ["products"],
+              "query": [
+                { "key": "page", "value": "1" },
+                { "key": "limit", "value": "10" },
+                { "key": "sortBy", "value": "purchaseDate", "description": "purchaseDate | price | name" },
+                { "key": "sortOrder", "value": "desc", "description": "asc | desc" },
+                { "key": "search", "value": "anker", "disabled": true },
+                { "key": "category", "value": "PHONE", "disabled": true },
+                { "key": "status", "value": "ACTIVE", "disabled": true },
+                { "key": "tags", "value": "daily-driver,travel", "disabled": true }
+              ]
+            },
+            "description": "Auth optional. With no/invalid Bearer token you get the sanitized public DTO (no price/receipts/etc). With a valid owner token you get the full shape. Sorting by price/purchaseDate still works at the DB level even for public requests — only the response is sanitized."
+          }
+        },
+        {
+          "name": "Get product by id",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{apiBase}}/products/{{productId}}", "host": ["{{apiBase}}"], "path": ["products", "{{productId}}"] },
+            "description": "Auth optional, same public/owner DTO split as the list endpoint."
+          }
+        },
+        {
+          "name": "Create product",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "  pm.collectionVariables.set('productId', pm.response.json().data.id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                { "key": "name", "value": "Postman Test Gadget", "type": "text" },
+                { "key": "category", "value": "OTHER", "type": "text", "description": "PHONE|LAPTOP|DESKTOP|MONITOR|HUB|CABLE|PENDRIVE|KEYBOARD|MOUSE|HEADPHONE|CHARGER|OTHER" },
+                { "key": "status", "value": "ACTIVE", "type": "text", "description": "ACTIVE|SOLD|GIFTED|BROKEN|LOST" },
+                { "key": "brand", "value": "TestBrand", "type": "text" },
+                { "key": "model", "value": "T-100", "type": "text" },
+                { "key": "tags", "value": "test,postman", "type": "text", "description": "comma-separated, or a JSON array string" },
+                { "key": "specs", "value": "{\"Color\":\"Black\"}", "type": "text", "description": "JSON object string" },
+                { "key": "price", "value": "1999", "type": "text" },
+                { "key": "currency", "value": "BDT", "type": "text" },
+                { "key": "purchaseDate", "value": "2026-01-15", "type": "text" },
+                { "key": "warrantyExpiry", "value": "2027-01-15", "type": "text" },
+                { "key": "purchasedFrom", "value": "Postman Store", "type": "text" },
+                { "key": "serialNumber", "value": "SN-0001", "type": "text" },
+                { "key": "notes", "value": "Created from the Postman collection.", "type": "text" },
+                { "key": "referenceImage", "type": "file", "src": [], "description": "Optional file OR omit and send a `referenceImage` text field with a URL instead" },
+                { "key": "receiptImages", "type": "file", "src": [], "description": "Optional, up to 5 files, 5MB each, jpeg/png/webp" }
+              ]
+            },
+            "url": { "raw": "{{apiBase}}/products", "host": ["{{apiBase}}"], "path": ["products"] },
+            "description": "Owner-only. Multipart form. `specs` and `tags` accept either a JSON string or (for tags) a comma-separated string."
+          }
+        },
+        {
+          "name": "Update product",
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                { "key": "status", "value": "SOLD", "type": "text", "description": "Every field is optional on update — only send what changed." },
+                { "key": "price", "value": "1799", "type": "text", "disabled": true },
+                { "key": "warrantyExpiry", "value": "2027-06-01", "type": "text", "disabled": true, "description": "Changing this resets warrantyNotified to false server-side." },
+                { "key": "referenceImage", "type": "file", "src": [], "disabled": true },
+                { "key": "receiptImages", "type": "file", "src": [], "disabled": true }
+              ]
+            },
+            "url": { "raw": "{{apiBase}}/products/{{productId}}", "host": ["{{apiBase}}"], "path": ["products", "{{productId}}"] },
+            "description": "Owner-only. Default body here just flips status to SOLD — enable/edit the other disabled fields as needed."
+          }
+        },
+        {
+          "name": "Delete product (soft)",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": { "raw": "{{apiBase}}/products/{{productId}}", "host": ["{{apiBase}}"], "path": ["products", "{{productId}}"] },
+            "description": "Owner-only. Soft delete — sets status to LOST, preserves the row for analytics history."
+          }
+        },
+        {
+          "name": "Delete product (hard)",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{apiBase}}/products/{{productId}}?hard=true",
+              "host": ["{{apiBase}}"],
+              "path": ["products", "{{productId}}"],
+              "query": [{ "key": "hard", "value": "true" }]
+            },
+            "description": "Owner-only. Actually deletes the row — use for cleaning up duplicates, not routine removal."
+          }
+        },
+        {
+          "name": "Export CSV",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{apiBase}}/products/export/csv", "host": ["{{apiBase}}"], "path": ["products", "export", "csv"] },
+            "description": "Owner-only. Streams the full purchase history as a CSV file — use Postman's \"Send and Download\" to save it."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Analytics",
+      "item": [
+        {
+          "name": "Summary",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{apiBase}}/analytics/summary", "host": ["{{apiBase}}"], "path": ["analytics", "summary"] },
+            "description": "Owner-only. totalSpend / totalItems / averagePrice."
+          }
+        },
+        {
+          "name": "By category",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{apiBase}}/analytics/by-category", "host": ["{{apiBase}}"], "path": ["analytics", "by-category"] },
+            "description": "Owner-only. Spend + count grouped by category."
+          }
+        },
+        {
+          "name": "By month",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{apiBase}}/analytics/by-month", "host": ["{{apiBase}}"], "path": ["analytics", "by-month"] },
+            "description": "Owner-only. Monthly spend buckets via a raw DATE_TRUNC query."
+          }
+        },
+        {
+          "name": "Upcoming warranty",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{apiBase}}/analytics/upcoming-warranty", "host": ["{{apiBase}}"], "path": ["analytics", "upcoming-warranty"] },
+            "description": "Owner-only. Products with warranty expiring in the next 30 days, with the warrantyNotified flag."
+          }
+        }
+      ]
+    }
+  ]
+}
