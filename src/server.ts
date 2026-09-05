@@ -21,6 +21,10 @@ async function main() {
     logger.info(`Gadget Purchase Tracker API listening on port ${config.port} [${config.env}]`);
   });
 
+  // Only meaningful for a persistent process (VPS/PM2/Docker). On Vercel,
+  // this file never runs at all — api/index.ts exports the app directly
+  // and the warranty check runs via Vercel Cron hitting /warranty/run
+  // instead (see vercel.json + warranty.route.ts).
   scheduleWarrantyCron();
 }
 

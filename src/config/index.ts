@@ -30,6 +30,11 @@ const optionalEnvSchema = z.object({
   SMTP_USER: z.string().optional(),
   SMTP_PASSWORD: z.string().optional(),
   NOTIFICATION_EMAIL_TO: z.string().optional(),
+  // Set automatically once you add a Vercel Cron Job — Vercel sends this
+  // value back as `Authorization: Bearer <CRON_SECRET>` on the scheduled
+  // request, which is how /api/v1/warranty/run authenticates it. Unused
+  // (and the route stays disabled) on a plain node-cron deployment.
+  CRON_SECRET: z.string().optional(),
 });
 
 const requiredParsed = requiredEnvSchema.safeParse(process.env);
@@ -77,6 +82,7 @@ const config = {
     isConfigured: Boolean(optionalParsed.SMTP_HOST && optionalParsed.SMTP_USER && optionalParsed.SMTP_PASSWORD),
   },
   notificationEmailTo: optionalParsed.NOTIFICATION_EMAIL_TO,
+  cronSecret: optionalParsed.CRON_SECRET,
   corsAllowedOrigins: required.CORS_ALLOWED_ORIGINS.split(',').map((o) => o.trim()).filter(Boolean),
 };
 
