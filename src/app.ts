@@ -15,6 +15,14 @@ import logger from './utils/logger';
 
 const app: Application = express();
 
+// Required behind any reverse proxy (Vercel, Nginx, a load balancer) —
+// without this, Express reads the proxy's own IP as req.ip for every
+// request instead of the real client IP (from X-Forwarded-For). That
+// breaks express-rate-limit two ways: it either throws on every request
+// (all traffic sees 500s) or silently buckets every visitor under one
+// shared IP, so one client's traffic can exhaust everyone else's quota.
+app.set('trust proxy', 1);
+
 app.use(helmet());
 
 // Explicit CORS allow-list — never `*`. See CORS_ALLOWED_ORIGINS.

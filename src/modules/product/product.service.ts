@@ -12,6 +12,7 @@ import {
   SortableField,
 } from './product.constant';
 import { toProductDTO } from './product.dto';
+import analyticsService from '../analytics/analytics.service';
 
 export interface GetProductsQuery {
   search?: string;
@@ -25,12 +26,17 @@ export interface GetProductsQuery {
 }
 
 /**
- * Invalidate all cached public product responses. Called on any mutation.
- * TTL-based expiry alone would also be acceptable per spec (§10.5) but an
- * eager wildcard flush keeps the public catalog from showing stale data
- * for the cache's full TTL window right after an edit.
+ * Invalidate all cached public product responses, AND the analytics cache
+ * (spec §10.2 requires analytics invalidation on mutation too — summary/
+ * by-category/by-month/upcoming-warranty all read from the same Product
+ * table, so a stale analytics cache would show a different item count/
+ * total spend than the product list right after a create/update/delete).
+ * TTL-based expiry alone would also be acceptable per spec but an eager
+ * wildcard flush keeps every screen consistent immediately after an edit
+ * instead of for up to the full cache TTL window.
  */
 const invalidateProductCache = async (): Promise<void> => {
+  await analyticsService.invalidateAnalyticsCache();
   if (!redisClient.isAvailable()) return;
   try {
     const keys = await redisClient.client!.keys(`${PRODUCT_CACHE_KEY_PREFIX}:*`);

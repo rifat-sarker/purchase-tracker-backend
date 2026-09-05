@@ -14,6 +14,25 @@ const withCache = async <T>(key: string, fetcher: () => Promise<T>): Promise<T> 
   return result;
 };
 
+/**
+ * Called by product.service.ts on every create/update/delete. Without
+ * this, summary/by-category/by-month/upcoming-warranty stay stale for up
+ * to the full 5-minute TTL after a mutation — e.g. the dashboard's "Items"
+ * and "Total spend" stat cards would keep showing pre-delete numbers even
+ * though the product list itself (which isn't cached for the owner)
+ * already reflects the change, an inconsistency a user would (rightly)
+ * read as a bug.
+ */
+const invalidateAnalyticsCache = async (): Promise<void> => {
+  if (!redisClient.isAvailable()) return;
+  try {
+    const keys = await redisClient.client!.keys(`${ANALYTICS_CACHE_PREFIX}:*`);
+    if (keys.length) await redisClient.client!.del(...keys);
+  } catch {
+    // best-effort — TTL will still expire the entries naturally
+  }
+};
+
 const getSummary = () =>
   withCache('summary', async () => {
     const result = await prisma.product.aggregate({
@@ -90,4 +109,4 @@ const getUpcomingWarranty = () =>
     }));
   });
 
-export default { getSummary, getByCategory, getByMonth, getUpcomingWarranty };
+export default { getSummary, getByCategory, getByMonth, getUpcomingWarranty, invalidateAnalyticsCache };
