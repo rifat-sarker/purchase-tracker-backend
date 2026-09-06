@@ -56,15 +56,21 @@ const globalErrorHandler = (err: unknown, req: Request, res: Response, _next: Ne
     message = err.message;
     errorSources = [{ path: '', message: err.message }];
   } else if (err instanceof Error) {
-    message = err.message || message;
-    errorSources = [{ path: '', message }];
     if (err.name === 'JsonWebTokenError') {
       statusCode = httpStatus.UNAUTHORIZED;
       message = 'Invalid token';
     } else if (err.name === 'TokenExpiredError') {
       statusCode = httpStatus.UNAUTHORIZED;
       message = 'Token expired';
+    } else {
+      // Any other unexpected Error (a bug, a dependency throwing, a
+      // connection failure) stays a generic 500 message in every
+      // environment — its raw .message can carry internal details
+      // (file paths, connection strings, library internals). It's still
+      // logged in full below for debugging; the client just never sees it.
+      message = config.env === 'development' ? err.message || message : message;
     }
+    errorSources = [{ path: '', message }];
   }
 
   if (statusCode >= 500) {
